@@ -1,0 +1,196 @@
+---
+id: builtin-widgets
+title: Built-in widgets
+---
+
+This page covers the basic built-in widgets. For the full list of components and APIs, see the [com.facebook.litho.widget](pathname:///javadoc/index.html?com/facebook/litho/widget/package-summary.html) package in javadocs.
+
+## Text
+
+Shows simple text (the equivalent of an Android `TextView` within Litho).
+
+### Required Prop
+
+* `CharSequence text` - text to display.
+
+### Usage
+
+`Text` has numerous optional props that can be used style text, just as with `TextView` since both use `android.text.Layout` under the hood.
+
+A full list of the optional props is available in the [javadocs](pathname:///javadoc/com/facebook/litho/widget/Text.html).
+
+Most props directly accept resources ids:
+
+```java
+final Component component =
+    Text.create(c)
+        .text("This is my example text")
+        .textSizeRes(R.dimen.my_text_size)
+        .textColorRes(R.color.my_text_color)
+        .textAlignment(Layout.Alignment.ALIGN_CENTER)
+        .build();
+ ```
+
+## TextInput
+
+Renders an editable text input using an Android `EditText`.
+
+### Required Prop
+
+None.
+
+### Usage
+
+As this component is backed by Android's `EditText`, many native capabilities are applicable:
+
+* Use an `android.text.InputFilter ` to set a text length limit or modify text input.
+* Change the input representation by passing an `android.text.InputType` constant.
+* For performance reasons, avoid recreating the Component with different props to change its configuration. Instead, use Event triggers `OnTrigger` to update text, request view focus or set selection. For example, `TextInput.setText(c, "myTextInputKey", "myText")`.
+
+```java
+private static final InputFilter lenFilter = new InputFilter.LengthFilter(maxLength);
+Component component =
+    TextInput.create(c)
+        .initialText(text)
+        .textColorStateList(ColorStateList.valueOf(color))
+        .multiline(true)
+        .inputFilter(lenFilter)
+        .backgroundColor(Color.TRANSPARENT)
+        .inputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_CAP_SENTENCES)
+        .build();
+ ```
+
+## Image
+
+Displays a drawable.
+
+### Required Prop
+
+* `Drawable drawable` - drawable to display.
+
+### Usage
+
+```java
+Component component =
+    Image.create(c)
+        .drawableRes(R.drawable.my_drawable)
+        .scaleType(ImageView.ScaleType.CENTER_CROP)
+        .build();
+```
+
+## Card
+
+The Litho equivalent of an Android `CardView`. `Card` applies borders with shadows/elevation to a given component.
+If your card is rendered on top of a dynamically coloured background that cannot be 'faked' using the `Card` component, use the less performant prop `transparencyEnabled(true)`.
+
+### Required Prop
+
+* `Component content` - the component to decorate.
+
+### Usage
+
+```java
+Component component =
+	Card.create(c)
+        .content(myContentComponent)
+        .clippingColorRes(R.color.my_clipping_color)
+        .cornerRadiusDip(8)
+        .build();
+```
+
+## SolidColor
+
+Renders solid colour.
+
+### Required Prop
+
+* `int color` - colour to display.
+
+### Usage
+
+```java
+Component component =
+    SolidColor.create(c)
+        .color(Color.RED)
+        .alpha(0.5)
+        .build();
+```
+
+## Progress
+
+Renders an infinitely spinning progress bar backed by the Android's `ProgressBar`.
+
+### Required Prop
+
+None.
+
+### Usage
+
+```java
+Component component =
+	  Progress.create(c)
+        .indeterminateDrawableRes(R.drawable.my_loading_spinner)
+        .build();
+```
+
+## Spinner
+
+A simple spinner (dropdown) component. Derived from the standard Android `Spinner`.
+
+### Required Props
+
+* `List<String> options` - list of selection options.
+* `String selectedOption` - the currently selected option.
+
+### Usage
+
+```java
+List<String> myOptions = ...
+Component component =
+	  Spinner.create(c)
+        .options(myOptions)
+        .selectedOption(myOptions.get(0))
+        .build();
+```
+
+## VerticalScroll
+
+Wraps another component, allowing it to be vertically scrollable. It's analogous to Android's `ScrollView`.
+
+### Required Prop
+
+* `Component childComponent` - a component to vertically scroll.
+
+### Usage
+
+```java
+Component component =
+	  VerticalScroll.create(c)
+        .childComponent(myComponentToScroll)
+        .verticalFadingEdgeEnabled(true)
+        .fadingEdgeLengthDip(FADING_EDGE_LENGTH_DP)
+        .build();
+```
+
+## HorizontalScroll
+
+Wraps another component, allowing it to be horizontally scrollable. It's analogous to Android's `HorizontalScrollView`.
+
+### Required Prop
+
+* `Component contentProps` - a Component to horizontally scroll.
+
+### Usage
+
+```java
+Component component =
+	  HorizontalScroll.create(c)
+        .contentProps(myComponentToScroll)
+        .build();
+```
+
+## Recycler
+
+`Recycler` is the equivalent of Android's `RecyclerView`. It's recommended to use [Sections](../sections/start.mdx) for efficient list rendering, which uses `Recycler` under the hood.
+
+To use the `Recycler` directly, see the [RecyclerCollectionComponent](../sections/recycler-collection-component.md) page.

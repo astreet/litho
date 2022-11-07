@@ -1,0 +1,142 @@
+---
+id: migrating-from-mountspecs
+title: Migrating from MountSpecs
+---
+
+This page outlines the process of migrating from [MountSpecs](../codegen/mount-specs.md) to [Mountable Components](mountable-component.mdx).
+
+Unlike MountSpecs, Mountable Components consist of two separate pieces:
+
+* `MountableComponent.render()` - a method that returns a `Mountable` and `Style` that will be applied to it.
+* `Mountable` - an object that hosts the logic for measuring, creation, and setting properties on the mount content (a view or a drawable).
+
+The following two sections contain information on how to migrate MountSpec static lifecycle methods into a Mountable Component `render()` and the `Mountable` it returns. The [Cheatsheet](mountable-cheatsheet.mdx) can also be consulted for a set of links for the migration of individual aspects of existing code.
+
+## Setup - Adding Dependencies
+
+To use the Kotlin Litho API, you'll need to add the following dependencies into your BUCK file:
+
+```python title="BUCK"
+deps = [
+    "//fbandroid/libraries/components:litho_core_kotlin",
+    "//fbandroid/libraries/components/litho-widget-kotlin/src/main/kotlin/com/facebook/litho/kotlin/widget:widget", # for widgets
+],
+```
+
+More details on the setup steps are outlined in the [Introduction and Setup](../kotlin/setup-and-intro.mdx) page.
+
+## Migrating parts belonging to Mountable Component `render()` method
+
+The subsections below outline how to migrate the parts of a MountSpec that will be hosted by the Mountable Component. This includes Props and Common Props, useState and other [Hooks](../kotlin/hooks-for-spec-developers.mdx), Accessibility, Event Handling, and some other MountSpec static lifecycle methods.
+
+### Migrating Props and Common Props
+
+Similar to [KComponents](../kotlin/setup-and-intro.mdx/#props), Props are now just `val` properties on the `MountableComponent`, and `@PropDefaults` become default values of those `val` properties.
+
+Common Props can be set using the `Style` object which the `MountableComponent` returns from `render()` method on the `MountableRenderResult` object. You can find more information on `Style` and how to work with it [here](../kotlin/setup-and-intro.mdx/#common-props).
+
+### Migrating State and some other lifecycle methods
+
+As with KComponents, most of the APIs implemented with lifecycle methods in the Mount Specs API (such as @OnCreateInitialState and @OnAttached) have hooks equivalents in the Kotlin API.
+
+Those Hooks can be used in the `render()` method of the `MountableComponent`.
+
+More information on how to migrate Hooks can be found [here](../kotlin/hooks-for-spec-developers.mdx).
+
+### Migrating Accessibility
+
+Accessibility for Mountable Components is implemented using the `Style` object. You can find out more about how to implement A11Y for Mountable Components [here](accessibility.mdx).
+
+### Migrating event handling
+
+Event Handling migration works in the same way as for KComponents (for details, see the [Event Handling](../kotlin/event-handling.mdx) page).
+
+### Migrating @OnPrepare and @OnLoadStyle lifecycle methods
+
+MountableComponents do not provide a `@OnPrepare` lifecycle method to move heavy operations off the UI thread before the layout calculation is performed. Instead, such operations should take place in the Mountable Component's `render()` method: the result can be passed to the `Mountable` as its `val` property. Therefore, in MountableComponents, there's no equivalent of [inter-stage inputs and outputs](../codegen/mount-specs.md/#inter-stage-inputs-and-outputs).
+
+Similar to `@OnPrepare`, `@OnLoadStyle` lifecycle method's content should also migrate to be a part of MountableComponent's `render()` method.
+
+## Migrating parts belonging to the `Mountable` object
+
+The subsections below outline how to migrate the parts of a MountSpec that will be hosted by the `Mountable`. This includes logic to measure, create (and optionally pool), and bind the content, as well as `DynamicValues` and `Controllers` - a mechanism that replaces `@OnTrigger` static lifecycle method.
+
+### Migrating @OnMeasure and @OnBoundsDefined
+
+For MountSpecs, there are 2 measurement-related methods that are optional - @OnMeasure and @OnBoundsDefined.
+
+Static annotated @OnMeasure method could be used to define how a component should be measured during layout calculation. If width and height was explicitly set on the component, it would not be run at all.
+
+The second method, @OnBoundsDefined could [receive outputs](../codegen/mount-specs.md/#inter-stage-inputs-and-outputs) from @OnMeasure and would run after layout calculation, in order to carry out additional operations after final size of the component is known, but before the component is mounted. If @OnBoundsDefined method is included in the MountSpec, it is guaranteed to run once the sizes of the component has been calculated.
+
+Mountable measuring works in a significantly different way - there's only 1 method, `Mountable.measure()`, which runs at least one time, and can be run multiple times in a single layout pass (similarly to Android's `View.measure()`).
+
+Additionally, `Mountable.measure()` receives the `LayoutContext`, width and height constraints, and any previously calculated layout data. The method should return a `MeasureResult` that tells the Litho framework the width and height the content requires and, optionally, any layout data which will be passed to `mount()` and `unmount()` methods and to all the `Binders`. This is different from @OnMeasure static annotated method, where the sizes needed to be set on Size parameter object instead.
+
+When translating a MountSpec containing both @OnMeasure and @OnBoundsDefined, the logic needs to be merged into a single `measure()` method - there's no need to pass outputs from @OnMeasure to @OnBoundsDefined.
+
+:::note
+For MountSpecs that did not implement @OnMeasure nor @OnBoundsDefined at all, `Mountable.measure()` can leverage `MeasureResult.fromSpecs()` method to set return the appropriate sizes.
+:::
+
+For more information, see the [Measuring](mountable-measuring.mdx) page.
+
+### Migrating @OnCreateContent
+
+`@OnCreateMountContent` lifecycle method's equivalent for Mountable is the `createContent()` method.
+
+More information on Mountable content creation can be found [here](mountable.mdx/#content-creation).
+
+### Migrating content pooling and pre-allocation
+
+For Mountable, instead of static annotated methods or @MountSpec annotation parameters, it's the [ContentAllocator](introduction-to-rendercore.mdx/#contentallocator) returned from Mountable's `getContentAllocator()` method that can be used to configure the recycling pool and pre-allocation for content.
+
+Instead of specifying `canPreallocate` and `poolSize` parameters on the @MountSpec annotation, `getContentAllocator()` method should be overridden to return an implementation of the `ContentAllocator` interface and overridden 'canPreallocate()' and 'poolSize()' methods. `ContentAllocator` interface also contains various other methods that can be overridden to configure content recycling. It is recommended to return a constant instance.
+
+More information on Mountable content pooling can be found [here](mountable.mdx).
+
+### Migrating Binding (properties setting) - @OnMount, @OnBind, @OnUnbind, @OnUnmount, and @OnShouldUpdate
+
+For MountSpecs, @OnMount and @OnBind static annotated methods [could be used to set properties on content](../codegen/mount-specs.md/#mount-spec-component-lifecycle), along with matching @OnUnmount and @OnUnbind to unset properties.
+
+Mountable uses [Binders](introduction-to-rendercore.mdx/#binder) to set properties on the content, and the equivalent of those 2 methods is a single `Binder.bind()` method to set the properties, and matching `Binder.unbind()` method to unset them.
+
+Therefore, the contents of @OnMount and @OnBind should be merged into single `bind()` method when migrating to Mountable (or `SimpleMountable.mount()` when using `SimpleMountable`). Similarly, @OnUnbind and @OnUnmount should be merged to form `unbind()` method (in that particular order).
+
+:::note
+In MountSpecs it was impossible to implement granular binding - only one pair of @OnMount and/or @OnBind could be used. Mountable allows for multiple Binders, so it is possible to implement granular binding (only resetting properties that changed), which can allow for performance gains.
+:::
+
+More information on binding and unbinding content properties can be found [here](mountable.mdx/#binding-and-unbinding-content-properties).
+
+Each [Binder](introduction-to-rendercore.mdx/#binder) contains `shouldUpdate()` method, which can help to avoid remeasuring and remounting upon updates if the properties of interest have not changed. It represents an [equivalent for @ShouldUpdate](../codegen/mount-specs.md/#shouldupdate) static annotated method present in MountSpecs.
+
+:::note
+Each individual `shouldUpdate()` should compare old and new properties that are set in `mount()` method of the same Binder.
+:::
+
+### Migrating @OnBindDynamicValue using bindTo API
+
+For Mountable, [DynamicValues](../animations/dynamic-props.mdx) can be implemented using the BindTo API.
+
+For more information and a step-by-step example, see the [BindTo - Dynamic Values API](mountable-bindto.mdx) page.
+
+### Migrating @OnTrigger using Controllers Pattern
+
+In MountSpecs, @OnTrigger static annotated methods and `Handle` could be used to [trigger events with handles](../codegen/trigger-events.md).
+
+To implement equivalent behaviour in Mountable, Controller pattern should be used instead.
+
+For more information and a step-by-step example, see the [Controllers Pattern](mountable-controllers.mdx) page.
+
+### Migrating hasChildLithoViews parameter
+
+In MountSpecs, the `hasChildLithoViews` parameter could be added to the @MountSpec annotation to indicate whether a given component mounts views that contain component-based content that can be incrementally mounted (such as if the mounted view has a LithoView with incremental mount enabled).
+
+To implement the equivalent behaviour in Mountable, override the [doesMountRenderTreeHosts()](https://fburl.com/doesmountrendertreehosts) method to return `true`.
+
+### Migrating isPureRender parameter
+
+In MountSpecs, the `isPureRender` parameter could be added to the @MountSpec annotation to indicate whether a given component is pure render - when the ComponentTree for this component is updated, if nothing changes then the measurements for this component can be re-used.
+
+For Mountable, there's no equivalent behaviour as all the Mountable Components are pure render, so when migrating this parameter should be ignored.
